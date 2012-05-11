@@ -127,6 +127,7 @@ class Rshell(object):
         self.shell.astext()
 
         # set the plotting device and record an error, if any
+        # maybe will be used for an exception
         self.shell.process('png("%s/Rplots%%03d.png",%s)' % (tmpd, png_args))
         png_error = self.shell.astext()
 
