@@ -18,12 +18,16 @@ ro.conversion.py2ri = numpy2ri
 class Rmagic(object):
 
     def __init__(self, shell=None):
+        # the embedded R process from rpy2
         self.r = ro.R()
         self.output = []
         self.eval = ri.baseenv['eval']
         self.shell = shell
 
     def write_console(self, output):
+        '''
+        A hook to capture R's stdout.
+        '''
         self.output.append(output)
 
     def flush(self):
@@ -31,7 +35,90 @@ class Rmagic(object):
         self.output = []
         return value
 
+    def push_line_magic(self, args):
+        '''
+        A line-level magic for R that pushes
+        variables from python to rpy2. 
+
+        Parameters
+        ----------
+
+        args: inputs
+
+              A white space separated string of 
+              names of objects in the python name space to be 
+              assigned to objects of the same name in the
+              R name space. 
+
+        '''
+
+        args = args.split(' ')
+        for input in args:
+            # need to have access the shell to assign these
+            # python variables to variables in R
+            # for now, this is a hack, with self.shell a dictionary
+            self.r.assign(input, self.shell[input])
+            
+
+    def pull_line_magic(self, args):
+        '''
+        A line-level magic for R that pushes
+        variables from python to rpy2. 
+
+        Parameters
+        ----------
+
+        args: outputs
+
+              A white space separated string of 
+              names of objects in the R name space to be 
+              assigned to objects of the same name in the
+              python name space. 
+
+        Notes
+        -----
+
+        Beware that R names can have '.' so this is not fool proof.
+        To avoid this, don't name your R objects with '.'s...
+
+        '''
+
+        args = args.split(' ')
+        for output in args:
+            # need to have access the shell 
+            # for now, this is a hack, with self.shell a dictionary
+            self.shell[output] = np.asarray(self.r(output))
+
+
     def cell_magic(self, args, text):
+        '''
+        A cell-level magic for R. 
+
+        Parameters
+        ----------
+
+        args: {inputs, outputs, width, height, units, pointsize, bg}
+
+              Optional long arguments recognized by the cell magic.
+              The first two relate to passing python objects 
+              back and forth between rpy2 and python:
+              '--inputs' should be a comma separated list of
+              names of objects in the namespace of the shell;
+              '--outputs' are names of object in the R namespace
+              that are returned as arrays. 
+
+              All other args are passed as arguments to 
+              the png plotting device in R.
+
+        text: str
+
+              String of R code to be executed by rpy2. 
+              Anything written to stdout of R is captured,
+              as are plots (in the form of .png files) that
+              are published via ipython's frontend
+              publishing system.
+
+        '''
         # need to get the ipython instance for assigning
 
         opts, args = getopt(args.strip().split(' '), None, ['inputs=',
@@ -109,6 +196,28 @@ class Rshell(object):
         self.shell = EmbeddedRShell()
 
     def cell_magic(self, args, text):
+        '''
+        A cell-level magic for R that mimics R's console. 
+
+        Parameters
+        ----------
+
+        args: {width, height, units, pointsize, bg}
+
+              Optional long arguments recognized by the cell magic.
+              All args are passed as arguments to 
+              the png plotting device in R.
+
+        text: str
+
+              String of R code to be executed by rpy2. 
+              Anything written to stdout of R is captured,
+              as are plots (in the form of .png files) that
+              are published via ipython's frontend
+              publishing system.
+
+        '''
+
         # need to get the ipython instance for assigning
 
         opts, args = getopt(args.strip().split(' '), None, [# these are options for png
@@ -149,14 +258,14 @@ class Rshell(object):
         mime = mimetypes[fmt]
 
         # publish the printed R objects, if any
-        publish_display_data('Rmagic.cell_magic', {'text/plain':text_result})
+        publish_display_data('Rshell.cell_magic', {'text/plain':text_result})
 
         # flush text streams before sending figures, helps a little with output                                                                
         for image in images:
             # synchronization in the console (though it's a bandaid, not a real sln)                           
             sys.stdout.flush(); sys.stderr.flush()
             publish_display_data(
-                'Rmagic.cell_magic',
+                'Rshell.cell_magic',
                 {mime : image}
             )
         value = {}
