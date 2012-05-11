@@ -101,12 +101,73 @@ class Rmagic(object):
         # kill the temporary directory
         rmtree(tmpd)
 
+from rrunner import EmbeddedRShell
 
+class Rshell(object):
 
+    def __init__(self):
+        self.shell = EmbeddedRShell()
+
+    def cell_magic(self, args, text):
+        # need to get the ipython instance for assigning
+
+        opts, args = getopt(args.strip().split(' '), None, [# these are options for png
+                                                            'width=',
+                                                            'height=',
+                                                            'units=',
+                                                            'pointsize=',
+                                                            'bg='])
+
+        png_args = ','.join(['%s=%s' % (o[2:],v) for o, v in opts])
+
+        # execute the R code in a temporary directory 
+
+        tmpd = tempfile.mkdtemp()
+        # flush the output
+        self.shell.astext()
+
+        # set the plotting device and record an error, if any
+        self.shell.process('png("%s/Rplots%%03d.png",%s)' % (tmpd, png_args))
+        png_error = self.shell.astext()
+
+        # execute the code
+        self.shell.process(text)
+        text_result = self.shell.astext()
+
+        # turn off the png device
+        self.shell.process('dev.off()')
+
+        # read out all the saved .png files
+
+        images = [file(imgfile).read() for imgfile in glob("%s/Rplots*png" % tmpd)]
+        
+        # now publish the images
+        # mimicking IPython/zmq/pylab/backend_inline.py
+        fmt = 'png'
+        mimetypes = { 'png' : 'image/png', 'svg' : 'image/svg+xml' }
+        mime = mimetypes[fmt]
+
+        # publish the printed R objects, if any
+        publish_display_data('Rmagic.cell_magic', {'text/plain':text_result})
+
+        # flush text streams before sending figures, helps a little with output                                                                
+        for image in images:
+            # synchronization in the console (though it's a bandaid, not a real sln)                           
+            sys.stdout.flush(); sys.stderr.flush()
+            publish_display_data(
+                'Rmagic.cell_magic',
+                {mime : image}
+            )
+        value = {}
+
+        # kill the temporary directory
+        rmtree(tmpd)
 
 
 rmagic = Rmagic()
 ri.set_writeconsole(rmagic.write_console)
+
+rshell = Rshell()
 
 if __name__ == '__main__':
 
