@@ -48,6 +48,9 @@ class RRunner(InteractiveRunner):
         self.run_source('flushing...\n')
         os.remove(self.profile.name)
         
+    def __del__(self):
+        self.child.close()
+
 class EmbeddedRShell:
     def __init__(self):
 
