@@ -21,8 +21,15 @@ class Rmagic(object):
         # the embedded R process from rpy2
         self.r = ro.R()
         self.output = []
-        self.eval = ri.baseenv['eval']
         self.shell = shell
+
+    def eval(self, line):
+        # self.output.append(line + '\n')
+        try:
+            ri.baseenv['eval'](ri.parse(line))
+        except ri.RRuntimeError as msg:
+            self.output.append('ERROR parsing "%s": %s\n' % (line, msg))
+            pass
 
     def write_console(self, output):
         '''
@@ -58,7 +65,6 @@ class Rmagic(object):
             # python variables to variables in R
             # for now, this is a hack, with self.shell a dictionary
             self.r.assign(input, self.shell[input])
-            
 
     def pull_line_magic(self, args):
         '''
@@ -151,7 +157,9 @@ class Rmagic(object):
 
         tmpd = tempfile.mkdtemp()
         self.r('png("%s/Rplots%%03d.png",%s)' % (tmpd, png_args))
-        self.eval(ri.parse(text))
+        lines = text.split('\n')
+        [self.eval(line) for line in lines]
+        #self.eval(ri.parse(text))
         self.r('dev.off()')
 
         # read out all the saved .png files
